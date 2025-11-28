@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Live stream player</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Arial; background:#111; color:#eee; display:flex; flex-direction:column; align-items:center; gap:16px; padding:20px; min-height:100vh; }
+    .player { width:100%; max-width:900px; background:#000; border-radius:8px; overflow:hidden; box-shadow:0 6px 24px rgba(0,0,0,.6); }
+    video { width:100%; height:auto; display:block; background:#000; }
+    .controls { width:100%; max-width:900px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+    input[type=text] { width:60%; min-width:200px; padding:8px; border-radius:6px; border:1px solid #333; background:#121212; color:#eee; }
+    button { padding:8px 12px; border-radius:6px; border:0; background:#0a84ff; color:white; cursor:pointer; }
+    small { color:#aaa; }
+  </style>
+</head>
+<body>
+  <h2>HLS Player</h2>
+
+  <div class="player">
+    <video id="video" controls playsinline webkit-playsinline></video>
+  </div>
+
+  <div class="controls">
+    <input id="url" type="text" value="http://192.168.1.15:8080/hls/test.m3u8" />
+    <button id="playBtn">Load & Play</button>
+    <button id="reloadBtn">Reload Player</button>
+  </div>
+
+  <p><small>If the stream doesn't play in Chrome/Edge, the page will use hls.js. Safari (iOS/Mac) supports HLS natively.</small></p>
+
+  <!-- hls.js (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.0/dist/hls.min.js"></script>
+  <script>
+    const video = document.getElementById('video');
+    const urlInput = document.getElementById('url');
+    const playBtn = document.getElementById('playBtn');
+    const reloadBtn = document.getElementById('reloadBtn');
+    let hls = null;
+
+    function loadStream(url) {
+      // destroy previous instance
+      if (hls) { hls.destroy(); hls = null; }
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+
+      // Safari / native HLS
+      if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = url;
+        video.play().catch(e => console.warn('play() error:', e));
+        return;
+      }
+
+      // hls.js fallback for modern browsers (Chrome, Edge)
+      if (Hls.isSupported()) {
+        hls = new Hls({
+          // optional settings
+          maxBufferLength: 30,
+          xhrSetup: function (xhr, url) {
+            // xhr.withCredentials = false; // if needed
+          }
+        });
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+          hls.loadSource(url);
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.play().catch(e => console.warn('play() error:', e));
+          });
+        });
+        hls.on(Hls.Events.ERROR, (evt, data) => {
+          console.error('Hls error:', data);
+        });
+      } else {
+        // very old browsers
+        alert('Your browser does not support HLS playback. Try Safari, VLC or use a modern Chrome/Edge with this page.');
+      }
+    }
+
+    playBtn.addEventListener('click', () => {
+      loadStream(urlInput.value.trim());
+    });
+
+    reloadBtn.addEventListener('click', () => {
+      if (hls) hls.destroy();
+      video.load();
+      loadStream(urlInput.value.trim());
+    });
+
+    // auto-load default url on page open
+    window.addEventListener('load', () => loadStream(urlInput.value.trim()));
+  </script>
+</body>
+</html>
